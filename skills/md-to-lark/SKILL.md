@@ -18,10 +18,13 @@ ALL headings promote up one level EXCEPT `#` which stays as `#`. Auto-numbering 
 | Source Markdown | Output HTML | Numbering |
 | :--- | :--- | :--- |
 | `#` Title | `<h1>` | No numbering (document title) |
-| `## Section` | `<h1>` | `1.`, `2.`, `3.` ... |
-| `### Sub-section` | `<h2>` | `1.1`, `1.2`, `2.1` ... |
-| `#### Sub-sub` | `<h3>` | `1.1.1`, `1.1.2` ... |
-| `##### Deep` | `<h4>` | No numbering |
+| `## Section` | `<h1>` | `1.` `2.` `3.` (trailing period) |
+| `### Sub-section` | `<h2>` | `1.1.` `1.2.` `2.1.` (trailing period) |
+| `#### Sub-sub` | `<h3>` | `1.1.1.` `1.1.2.` (trailing period) |
+| `##### Deep` | `<h4>` | `1.1.1.1.` (trailing period) |
+| `######` and beyond | `<h5>+` | Continue same pattern with trailing period |
+
+ALL numbered headings MUST end with a trailing period (e.g. `1.1.` not `1.1`) because Lark only auto-formats numbered lists when the number ends with `.` followed by a space.
 
 If the source heading already has numbering (e.g. `### 1.1 Name`), strip the existing number before applying auto-numbering. Use `strip_existing_number()` regex: `^\d+(\.\d+)*\.?\s+`
 
@@ -57,7 +60,7 @@ Key attributes for Lark's "Word content" detection:
 
 - **Bullet list** (`- item`): `<ul><li>text</li></ul>`
 - **Numbered list** (`1. item`): `<ol><li>text</li></ol>`
-- **Todo list** (`- [ ] item` / `- [x] item`): `<ul style="list-style:none"><li>☐ text</li></ul>` or `☑` for checked
+- **Todo list** (`- [ ] item` / `- [x] item`): Treat as regular bullet list `<ul><li>text</li></ul>` — strip the `[ ]`/`[x]` checkbox marker. Lark ignores `list-style:none` CSS so using ☐/☑ with `<ul>` creates double markers.
 
 ### Other Elements
 
