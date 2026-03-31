@@ -7,85 +7,72 @@ description: Use when user wants to convert a Markdown file for pasting into Lar
 
 ## Overview
 
-Converts Markdown files into Lark-compatible format and copies to clipboard. The core technique is **generating Microsoft Word-format HTML** (`MsoTableGrid` class + Word XML namespaces) so Lark interprets pasted tables as **document tables** (Block Type 31), not Sheet/spreadsheet components (Block Type 30).
+Converts Markdown files into Lark-compatible format and copies to clipboard. The core technique is generating **Microsoft Word-format HTML** (`MsoTableGrid` class + Word XML namespaces) so Lark interprets pasted tables as **document tables** (Block Type 31), not Sheet/spreadsheet components (Block Type 30).
 
-## Why This Exists
+## Conversion Rules
 
-Lark's paste behavior:
-- Plain markdown pipe tables → not recognized, renders as broken text
-- Standard HTML `<table>` → **Sheet** (spreadsheet component)
-- HTML with Word metadata (`MsoTableGrid`, `xmlns:w`) → **Document table** ✓
-- Lark markdown import → does NOT support table syntax at all
+### Heading Promotion + Auto-Numbering
 
-## Format Rules (Apply to Markdown BEFORE Conversion)
+ALL headings promote up one level EXCEPT `#` which stays as `#`. Auto-numbering is applied after promotion:
 
-Before converting to HTML, the source `.md` file must follow these rules for correct Lark rendering:
-
-### Heading Hierarchy (for Lark TOC)
-
-Lark renders heading levels as:
-- `#` → Document title (only ONE per document)
-- `##` → Main sections (large headings, appear as top-level in TOC sidebar)
-- `###` → Sub-sections (blue/teal colored headings in Lark, nested in TOC)
-
-Rules:
-1. Use `#` ONLY for the document title
-2. Use `##` for major chapters with sequential numbering: `## 1. Section Name`, `## 2. Section Name`
-3. Use `###` for sub-sections: `### 2.1 Sub-section Name`, `### 2.2 Sub-section Name`
-4. NEVER have multiple `#` headings — this flattens the TOC
-
-### Table Format
-
-Standard markdown pipe table with left-alignment separator:
-
-```
-| Header1 | Header2 | Header3 |
+| Source Markdown | Output HTML | Numbering |
 | :--- | :--- | :--- |
-| data | data | data |
+| `#` Title | `<h1>` | No numbering (document title) |
+| `## Section` | `<h1>` | `1.`, `2.`, `3.` ... |
+| `### Sub-section` | `<h2>` | `1.1`, `1.2`, `2.1` ... |
+| `#### Sub-sub` | `<h3>` | `1.1.1`, `1.1.2` ... |
+| `##### Deep` | `<h4>` | No numbering |
+
+If the source heading already has numbering (e.g. `### 1.1 Name`), strip the existing number before applying auto-numbering. Use `strip_existing_number()` regex: `^\d+(\.\d+)*\.?\s+`
+
+### Tables → Word MsoTableGrid
+
+Every table MUST use Word-compatible HTML:
+
+```html
+<table class="MsoTableGrid" border="1" cellspacing="0" cellpadding="0"
+       style="border-collapse:collapse;border:none">
+<tr>
+  <td style="border:solid windowtext 1.0pt;padding:3.0pt 5.0pt;background:#F2F2F2">
+    <p class="MsoNormal"><b>Header text</b></p>
+  </td>
+</tr>
+<tr>
+  <td style="border:solid windowtext 1.0pt;padding:3.0pt 5.0pt">
+    <p class="MsoNormal">Data text</p>
+  </td>
+</tr>
+</table>
+<p class="MsoNormal">&nbsp;</p>
 ```
 
-- First column header should be descriptive (e.g. `功能編號` not `#`)
-- Use `:---` (with colon) for left-alignment
-- No line breaks within cells — use `;` to separate items within a cell
-- Wrap code/parameters in backticks: \`API_PARAM\`
+Key attributes for Lark's "Word content" detection:
+- `class="MsoTableGrid"` on `<table>`
+- `class="MsoNormal"` on `<p>` inside cells
+- `border:solid windowtext 1.0pt` on `<td>`
+- `background:#F2F2F2` on header row `<td>` (visual styling only; Lark native header row CANNOT be set via paste)
+- Add `<p class="MsoNormal">&nbsp;</p>` after each table for spacing
 
-### Numbered Lists
+### Lists
 
-Use `1.` prefix with trailing period for auto-formatting:
-```
-1. First item
-2. Second item
-```
+- **Bullet list** (`- item`): `<ul><li>text</li></ul>`
+- **Numbered list** (`1. item`): `<ol><li>text</li></ol>`
+- **Todo list** (`- [ ] item` / `- [x] item`): `<ul style="list-style:none"><li>☐ text</li></ul>` or `☑` for checked
 
-For hierarchical numbering in headings, use the heading level:
-```
-## 1. Main Section
-### 1.1 Sub-section
-```
+### Other Elements
 
-### Bullet Lists
+- **Blockquote** (`> text`): `<blockquote style="border-left:4px solid #ccc;padding:8px 16px;color:#555;background:#f9f9f9"><p class="MsoNormal">text</p></blockquote>`
+- **Code block** (` ``` `): `<pre style="background:#f5f5f5;padding:12px;font-family:Consolas;font-size:10pt;white-space:pre-wrap;border:1px solid #e0e0e0"><code>text</code></pre>`
+- **Inline code** (`` `code` ``): `<span style="font-family:Consolas;background:#f0f0f0;padding:1px 3px">code</span>`
+- **Bold** (`**text**`): `<b>text</b>`
+- **Italic** (`*text*`): `<i>text</i>`
+- **Horizontal rule** (`---`): `<hr>`
+- **Paragraph**: `<p class="MsoNormal">text</p>`
 
-Use `- ` (dash + space) which Lark recognizes:
-```
-- Item one
-- Item two
-```
+### Document Wrapper
 
-### Special Characters
+Every generated HTML MUST be wrapped in:
 
-- Wrap API parameters in backticks: \`30min\`, \`AF=0.02\`
-- Wrap formulas in backticks: \`(O+H+L+C)/4\`
-- Use `→` with spaces around arrows: `A → B`
-- Use `≈` directly (Lark supports Unicode)
-- Avoid `~` prefix for numbers (can trigger strikethrough) — use `約` instead
-
-## Conversion Process
-
-### Step 1: Parse Markdown to Word-Format HTML
-
-Generate HTML with these critical attributes:
-
-**Document wrapper:**
 ```html
 <html xmlns:o="urn:schemas-microsoft-com:office:office"
       xmlns:w="urn:schemas-microsoft-com:office:word"
@@ -94,46 +81,25 @@ Generate HTML with these critical attributes:
   <meta name="ProgId" content="Word.Document">
   <meta name="Generator" content="Microsoft Word 15">
   <meta charset="utf-8">
+  <style>
+    p.MsoNormal { margin:0; font-family:Calibri; font-size:11pt; }
+    table.MsoTableGrid { border-collapse:collapse; }
+    ul, ol { margin:4px 0; padding-left:2em; }
+  </style>
 </head>
+<body lang="ZH-TW">
+  ... content ...
+</body>
+</html>
 ```
 
-**Tables — MUST use Word classes:**
-```html
-<table class="MsoTableGrid" border="1" cellspacing="0" cellpadding="0"
-       style="border-collapse:collapse;border:none">
-  <tr>
-    <td style="border:solid windowtext 1.0pt;padding:3.0pt 5.0pt;background:#F2F2F2">
-      <p class="MsoNormal"><b>Header</b></p>
-    </td>
-  </tr>
-  <tr>
-    <td style="border:solid windowtext 1.0pt;padding:3.0pt 5.0pt">
-      <p class="MsoNormal">Data</p>
-    </td>
-  </tr>
-</table>
-```
+## Clipboard (macOS only)
 
-Key attributes that trigger Lark's "Word content" detection:
-- `class="MsoTableGrid"` on `<table>`
-- `class="MsoNormal"` on `<p>` inside cells
-- `border:solid windowtext 1.0pt` on `<td>`
-- `background:#F2F2F2` on header `<td>`
-
-**Other elements:**
-- Headings: `<h1>`, `<h2>`, `<h3>` standard tags
-- Blockquotes: `<p>` with left border style
-- Lists: `<ul><li>` standard tags
-- Code spans: `<span style="font-family:Consolas">code</span>`
-- Bold: `<b>text</b>`
-
-### Step 2: Copy to Clipboard (macOS)
-
-Use Swift to set ONLY `public.html` type — no RTF, no plain text:
+Use Swift to set ONLY `public.html` — no RTF, no plain text:
 
 ```swift
 import Cocoa
-let html = try! String(contentsOfFile: "/tmp/output.html", encoding: .utf8)
+let html = try! String(contentsOfFile: "/tmp/tf_word_clipboard.html", encoding: .utf8)
 let pb = NSPasteboard.general
 pb.clearContents()
 if let data = html.data(using: .utf8) {
@@ -141,47 +107,26 @@ if let data = html.data(using: .utf8) {
 }
 ```
 
-**Critical:** Setting only `public.html` prevents Lark from receiving extra MIME types that could trigger Sheet detection.
+Setting only `public.html` prevents Lark from receiving extra MIME types that trigger Sheet detection.
 
-### Step 3: User pastes into Lark with Cmd+V
+After clipboard is set, tell user: `已複製到剪貼簿，去 Lark 文檔 Cmd+V 粘貼即可。`
 
-## Quick Reference Script
+## Known Limitations
 
-A shell script `md-to-lark.sh` should exist in the project directory. If not, create it with the full conversion pipeline:
-
-1. Read `.md` file
-2. Parse markdown (headings, tables, lists, blockquotes, paragraphs)
-3. Generate Word-format HTML with `MsoTableGrid` tables
-4. Write to temp file
-5. Use Swift to copy HTML to clipboard
-6. Print success message
-
-Usage: `./md-to-lark.sh filename.md`
-Then user does `Cmd+V` in Lark.
+These Lark-native properties CANNOT be set via HTML paste:
+- **Header row** (Lark's "Set as header row"): Only settable via Lark UI or Open API. Visual workaround: bold + background color on first row.
+- **Auto-fit column width**: Lark ignores all CSS/HTML width hints. All columns paste as equal width.
+- Both can be set via **Lark Open API** (`docx/v1` endpoint) if the user has API credentials.
 
 ## What NOT to Do
 
 | Approach | Result in Lark |
 | :--- | :--- |
-| Copy-paste raw markdown text | Tables show as broken pipe-text |
-| Copy from HTML file in browser | Tables become **Sheet** (spreadsheet) |
-| Copy RTF to clipboard | Tables become **Sheet** |
-| Lark "Import → Markdown" | Does NOT support table syntax |
-| HTML without Word metadata | Tables become **Sheet** |
-| pandoc HTML with `<colgroup>` | Tables become **Sheet** |
-
-## Troubleshooting
-
-**Tables still become Sheet:**
-- Verify HTML has `xmlns:w="urn:schemas-microsoft-com:office:word"` namespace
-- Verify `<table>` has `class="MsoTableGrid"`
-- Verify clipboard only has `public.html` type (check with `pbpaste -Prefer html | head`)
-- Verify no `data-sheets-*` attributes in HTML
-
-**Heading hierarchy wrong in Lark TOC:**
-- Ensure only ONE `#` heading (document title)
-- Main sections must be `##`, sub-sections `###`
-
-**Bullet/numbered lists not formatted:**
-- Ensure `- ` (dash space) for bullets
-- Ensure blank line before list starts
+| Copy-paste raw markdown | Broken pipe-text |
+| Copy from HTML file in browser | **Sheet** (spreadsheet) |
+| Copy RTF to clipboard | **Sheet** |
+| Lark "Import → Markdown" | Does NOT support tables |
+| HTML without Word namespace | **Sheet** |
+| pandoc HTML with `<colgroup>` | **Sheet** |
+| `<thead>`/`<th>` tags | Ignored by Lark |
+| `<col width>` or CSS width | Ignored by Lark |
