@@ -24,7 +24,7 @@ ALL headings promote up one level EXCEPT `#` which stays as `#`. Auto-numbering 
 | `##### Deep` | `<h4>` | `1.1.1.1.` (trailing period) |
 | `######` and beyond | `<h5>+` | Continue same pattern with trailing period |
 
-ALL numbered headings MUST end with a trailing period (e.g. `1.1.` not `1.1`) because Lark only auto-formats numbered lists when the number ends with `.` followed by a space.
+ALL numbered headings MUST end with a trailing period (e.g. `1.1.` not `1.1`). Note: Lark only renders blue numbered list formatting for single-level `N.` patterns on `<h2>`. Multi-level patterns (`N.N.`, `N.N.N.`) will display as plain bold text regardless of heading tag. This is a Lark platform limitation — user has accepted this behavior.
 
 If the source heading already has numbering (e.g. `### 1.1 Name`), strip the existing number before applying auto-numbering. Use `strip_existing_number()` regex: `^\d+(\.\d+)*\.?\s+`
 
@@ -119,7 +119,8 @@ After clipboard is set, tell user: `已複製到剪貼簿，去 Lark 文檔 Cmd+
 These Lark-native properties CANNOT be set via HTML paste:
 - **Header row** (Lark's "Set as header row"): Only settable via Lark UI or Open API. Visual workaround: bold + background color on first row.
 - **Auto-fit column width**: Lark ignores all CSS/HTML width hints. All columns paste as equal width.
-- Both can be set via **Lark Open API** (`docx/v1` endpoint) if the user has API credentials.
+- **Multi-level heading numbering** (`N.N.`, `N.N.N.`): Only single-level `N.` on `<h2>` gets blue numbered list. Multi-level stays plain bold.
+- Header row and auto-fit can be set via **Lark Open API** (`docx/v1` endpoint) if the user has API credentials.
 
 ## What NOT to Do
 
