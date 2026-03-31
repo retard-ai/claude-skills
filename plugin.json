@@ -1,0 +1,5 @@
+{
+  "name": "md-to-lark",
+  "version": "1.0.0",
+  "description": "Convert Markdown to Lark-compatible format with proper document tables"
+}
