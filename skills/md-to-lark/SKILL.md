@@ -28,6 +28,8 @@ ALL numbered headings MUST end with a trailing period (e.g. `1.1.` not `1.1`). N
 
 If the source heading already has numbering (e.g. `### 1.1 Name`), strip the existing number before applying auto-numbering. Use `strip_existing_number()` regex: `^\d+(\.\d+)*\.?\s+`
 
+Also strip Chinese ordinal numbering patterns: `^[一二三四五六七八九十百千]+、\s*`
+
 ### Tables → Word MsoTableGrid
 
 Every table MUST use Word-compatible HTML:
